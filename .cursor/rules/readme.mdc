@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+Create and maintain only one documentation (README-like) file.
+The target audience of this project is skilled technical people, so there's no need to over explain anything.

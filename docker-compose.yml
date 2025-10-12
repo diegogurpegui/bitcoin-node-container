@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  bitcoin-node:
+    build: .
+    container_name: ${CONTAINER_NAME:-bitcoin-core-node}
+    restart: unless-stopped
+    
+    # Map the data directory to your external drive
+    # Path is configured via .env file
+    volumes:
+      - ${BITCOIN_DATA_PATH}:/home/bitcoin/.bitcoin
+      
+    # Expose ports to host
+    ports:
+      - "${RPC_PORT:-8332}:8332"  # RPC port
+      - "${P2P_PORT:-8333}:8333"  # P2P port (mainnet)
+      
+    # Environment variables for configuration
+    environment:
+      - BITCOIN_DATA=/home/bitcoin/.bitcoin
+      
+    # Optional: Set resource limits
+    # Uncomment and adjust based on your system resources
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: ${MEMORY_LIMIT:-4G}
+    #       cpus: '${CPU_LIMIT:-2}'
+

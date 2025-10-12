@@ -1,0 +1,25 @@
+# Environment files with sensitive data
+.env
+!.env.example
+
+# Bitcoin data directory (if accidentally created locally)
+bitcoin-data/
+.bitcoin/
+
+# Docker
+.dockerignore
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
