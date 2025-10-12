@@ -65,7 +65,7 @@ VOLUME ["/home/bitcoin/.bitcoin"]
 # Health check to verify node is responding
 # Note: We use a simple connectivity check instead of requiring RPC auth
 # This checks if bitcoind process is running and responding
-HEALTHCHECK --interval=5m --timeout=30s --start-period=5m --retries=3 \
+HEALTHCHECK --interval=10m --timeout=30s --start-period=15m --retries=3 \
   CMD pgrep -x bitcoind > /dev/null || exit 1
 
 # Start both Tor and bitcoind using supervisor
