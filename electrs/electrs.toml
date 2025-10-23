@@ -1,0 +1,19 @@
+# Electrs configuration for Docker setup
+# /data/electrs/electrs.conf
+
+# Bitcoin Core settings
+network = "bitcoin"
+daemon_dir = "/data/bitcoin"
+daemon_rpc_addr = "bitcoin-node:8332"
+daemon_p2p_addr = "bitcoin-node:8333"
+
+# Electrs settings (bind to localhost only)
+electrum_rpc_addr = "127.0.0.1:50001"
+db_dir = "/data/electrs/db"
+
+# Logging
+log_filters = "INFO"
+
+# Performance settings (optimized for Docker)
+index_batch_size = 10
+auto_reindex = true

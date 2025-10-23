@@ -146,6 +146,33 @@ chmod 600 "${BITCOIN_CONF}"
 echo "✓ Created bitcoin.conf at: ${BITCOIN_CONF}"
 echo ""
 
+# Create electrs.conf in the electrs data directory
+echo "Step 5: Creating electrs.conf"
+echo "--------------------------------------"
+
+# Get ELECTRS_DATA_PATH from .env file
+ELECTRS_DATA_PATH=$(grep "^ELECTRS_DATA_PATH=" .env | cut -d'=' -f2)
+
+if [ -z "$ELECTRS_DATA_PATH" ]; then
+    echo -e "${YELLOW}Warning: ELECTRS_DATA_PATH not found in .env file${NC}"
+    echo "Skipping electrs.conf creation"
+else
+    ELECTRS_CONF="${ELECTRS_DATA_PATH}/electrs.toml"
+    
+    # Create electrs data directory if it doesn't exist
+    if [ ! -d "$ELECTRS_DATA_PATH" ]; then
+        mkdir -p "$ELECTRS_DATA_PATH"
+        echo "✓ Created electrs data directory: ${ELECTRS_DATA_PATH}"
+    fi
+    
+    # Copy the template electrs.toml from the repo
+    cp electrs/electrs.toml "${ELECTRS_CONF}"
+    
+    chmod 600 "${ELECTRS_CONF}"
+    echo "✓ Created electrs.toml at: ${ELECTRS_CONF}"
+fi
+echo ""
+
 # Set secure permissions on .env
 chmod 600 .env
 echo "✓ Set secure permissions on .env file"
@@ -158,7 +185,10 @@ echo "=========================================="
 echo ""
 echo -e "${GREEN}Configuration Summary:${NC}"
 echo "  Data Path: ${DATA_PATH}"
-echo "  Config File: ${BITCOIN_CONF}"
+echo "  Bitcoin Config: ${BITCOIN_CONF}"
+if [ ! -z "$ELECTRS_DATA_PATH" ]; then
+    echo "  Electrs Config: ${ELECTRS_DATA_PATH}/electrs.toml"
+fi
 echo "  RPC User: ${RPC_USER}"
 echo ""
 echo -e "${YELLOW}⚠ IMPORTANT - Save these credentials securely:${NC}"
@@ -168,10 +198,18 @@ echo ""
 echo -e "${GREEN}Next Steps:${NC}"
 echo "  1. Review bitcoin.conf if you want to customize settings"
 echo "     Location: ${BITCOIN_CONF}"
-echo "  2. Build the container: docker-compose build"
-echo "  3. Start the node: docker-compose up -d"
-echo "  4. Check logs: docker-compose logs -f"
-echo "  5. Use helper script: ./bitcoin-cli.sh getblockchaininfo"
+
+STEP=2
+if [ ! -z "$ELECTRS_DATA_PATH" ]; then
+    echo "  ${STEP}. Review electrs.toml if you want to customize Electrs settings"
+    echo "     Location: ${ELECTRS_DATA_PATH}/electrs.toml"
+    STEP=$((STEP + 1))
+fi
+
+echo "  ${STEP}. Build the container(s): docker-compose build"
+echo "  $((STEP + 1)). Start the service(s): docker-compose up -d"
+echo "  $((STEP + 2)). Check logs: docker-compose logs -f"
+echo "  $((STEP + 3)). Use helper script: ./bitcoin-cli.sh getblockchaininfo"
 echo ""
 echo -e "${YELLOW}⚠ SECURITY NOTES:${NC}"
 echo "  - Keep your .env file secure (chmod 600 already applied)"

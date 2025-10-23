@@ -1,4 +1,4 @@
-# Bitcoin Node - Docker Setup
+# Bitcoin node container
 
 Run a full Bitcoin node with Docker. Blockchain data stored on external drive.
 
@@ -34,7 +34,24 @@ docker-compose up -d
 - Secure RPC authentication (auto-generated hashed credentials)
 - **Privacy-focused: All connections via Tor** (.onion only)
 - Built-in Tor daemon (no separate container needed)
+- **Electrum server (Electrs)** for wallet connectivity via Tor hidden service
+- Two-container setup: bitcoin-node + electrs-server
 - Helper script for easy commands
+
+## Architecture
+
+This setup runs two containers:
+
+1. **bitcoin-node**: Bitcoin Core with Tor daemon
+   - Handles blockchain sync and P2P connections
+   - Provides RPC interface for applications
+   - All connections via Tor (.onion only)
+
+2. **electrs-server**: Electrum server with Tor daemon
+   - Indexes blockchain for fast wallet queries
+   - Provides Electrum protocol for wallet connectivity
+   - Accessible only via Tor hidden service
+   - Depends on bitcoin-node for blockchain data
 
 ## Common Commands
 
@@ -54,8 +71,14 @@ docker-compose up -d
 # View logs
 docker-compose logs -f
 
+# View Electrs logs specifically
+docker-compose logs -f electrs
+
 # Restart node
 docker-compose restart
+
+# Restart Electrs only
+docker-compose restart electrs
 
 # Stop node
 docker-compose down
@@ -74,6 +97,52 @@ Monitor progress:
 ```
 
 When `verificationprogress` reaches ~1.0, you're fully synced.
+
+## Electrum Server (Electrs)
+
+The setup includes an Electrum server that allows you to connect Bitcoin wallets to your own node instead of third-party servers.
+
+**What it provides:**
+- Electrum protocol server for wallet connectivity
+- Indexes blockchain data for fast wallet queries
+- Works with hardware wallets (BitBox, Coldcard, Ledger, Trezor)
+- Compatible with desktop wallets (Sparrow, Electrum, Specter Desktop)
+- **Privacy-focused: Accessible only via Tor hidden service**
+
+**How to use:**
+1. Wait for Electrs to finish initial indexing (can take 12+ hours)
+2. Get the Electrs Tor hidden service address
+3. Connect your wallet using the .onion address
+
+**Check Electrs status:**
+```bash
+# View Electrs logs
+docker-compose logs -f electrs
+
+# Get Electrs Tor hidden service address
+docker exec electrs-server cat /var/lib/tor/electrs_hidden_service/hostname
+
+# Test Electrs connection via Tor (requires tor-proxy on host)
+# curl -X POST -H "Content-Type: application/json" \
+#   -d '{"jsonrpc":"2.0","method":"server.version","params":["electrum-client","1.4"],"id":1}' \
+#   --socks5-hostname 127.0.0.1:9050 \
+#   http://[ELECTRS_ONION_ADDRESS]:50001
+```
+
+**Wallet configuration:**
+- **Server:** Use the .onion address from the hostname file above
+- **Port:** 50001
+- **Protocol:** TCP (via Tor)
+- **Network:** Bitcoin mainnet
+
+**Important notes:**
+- Electrs runs in its own container with its own Tor daemon
+- Electrs is only accessible via Tor hidden service (no clearnet exposure)
+- Electrs must fully index the blockchain before wallets can connect
+- Initial indexing can take 12+ hours on slower hardware
+- Electrs will automatically reindex if Bitcoin Core is updated
+- The service depends on the Bitcoin node and will restart if needed
+- Configuration file: `electrs/electrs.conf` (copied to data directory by setup.sh)
 
 ## Security
 
@@ -181,6 +250,17 @@ docker-compose up -d
 
 Your blockchain data is preserved.
 
+## Updating Electrs
+
+```bash
+# 1. Edit electrs/Dockerfile - update ELECTRS_VERSION
+# 2. Rebuild Electrs
+docker-compose build electrs
+docker-compose up -d electrs
+```
+
+Electrs will automatically reindex if needed.
+
 ## Tor Privacy Configuration
 
 This node is configured for maximum privacy using Tor:
@@ -189,14 +269,16 @@ This node is configured for maximum privacy using Tor:
 - All Bitcoin P2P connections route through Tor (`proxy=127.0.0.1:9050`)
 - Only connects to `.onion` addresses (`onlynet=onion`)
 - Hidden service for incoming connections (`listenonion=1`)
-- Tor daemon runs automatically in the container
+- Tor daemon runs automatically in both containers
 - No clearnet exposure (`discover=0`)
+- Electrs also runs via Tor hidden service (separate from Bitcoin node)
 
 **How it works:**
-1. Container starts Tor daemon on port 9050 (SOCKS5 proxy)
+1. Both containers start their own Tor daemons
 2. Bitcoin Core connects exclusively through Tor
-3. Node creates `.onion` address for incoming connections
-4. All peer connections are via Tor hidden services
+3. Bitcoin node creates `.onion` address for incoming connections
+4. Electrs creates separate `.onion` address for wallet connections
+5. All peer connections are via Tor hidden services
 
 **Benefits:**
 - Complete IP address privacy
