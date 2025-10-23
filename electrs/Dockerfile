@@ -36,17 +36,8 @@ RUN cd /tmp/electrs && \
     install -m 0755 -o root -g root -t /usr/local/bin target/release/electrs && \
     rm -rf /tmp/electrs
 
-# Configure Tor for electrs hidden service
-RUN echo "# Tor configuration for electrs hidden service" > /etc/tor/torrc && \
-    echo "SocksPort 0" >> /etc/tor/torrc && \
-    echo "ControlPort 9051" >> /etc/tor/torrc && \
-    echo "CookieAuthentication 1" >> /etc/tor/torrc && \
-    echo "CookieAuthFile /var/lib/tor/control_auth_cookie" >> /etc/tor/torrc && \
-    echo "DataDirectory /var/lib/tor" >> /etc/tor/torrc && \
-    echo "" >> /etc/tor/torrc && \
-    echo "# Hidden service for electrs" >> /etc/tor/torrc && \
-    echo "HiddenServiceDir /var/lib/tor/electrs_hidden_service" >> /etc/tor/torrc && \
-    echo "HiddenServicePort 50001 127.0.0.1:50001" >> /etc/tor/torrc
+# Copy Tor configuration
+COPY torrc /etc/tor/torrc
 
 # Create Tor directories and set permissions
 RUN mkdir -p /var/lib/tor/electrs_hidden_service && \
@@ -56,10 +47,7 @@ RUN mkdir -p /var/lib/tor/electrs_hidden_service && \
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy electrs configuration
-COPY electrs.toml /data/electrs/electrs.toml
-
-# Create electrs home directory and config symlink
+# Create electrs home directory
 RUN mkdir -p /home/electrs/.electrs && \
     chown -R electrs:electrs /home/electrs
 
