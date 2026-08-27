@@ -8,6 +8,7 @@ services:
     # Path is configured via .env file
     volumes:
       - ${BITCOIN_DATA_PATH}:/home/bitcoin/.bitcoin
+      - ${BITCOIN_DATA_PATH}/tor:/var/lib/tor
       
     # Expose ports to host
     ports:
@@ -42,6 +43,7 @@ services:
       - ${ELECTRS_DATA_PATH}:/data/electrs
       # Share Bitcoin data directory so Electrs can access blockchain and RPC cookie
       - ${BITCOIN_DATA_PATH}:/data/bitcoin:ro
+      - ${ELECTRS_DATA_PATH}/tor/electrs_hidden_service:/var/lib/tor/electrs_hidden_service
       
     # Electrs is accessible via Tor hidden service only (no clearnet exposure)
     # ports:
@@ -58,4 +60,75 @@ services:
     #     limits:
     #       memory: ${ELECTRS_MEMORY_LIMIT:-2G}
     #       cpus: '${ELECTRS_CPU_LIMIT:-1}'
+
+  mempool-db:
+    image: mariadb:10.5.21
+    container_name: ${MEMPOOL_DB_CONTAINER_NAME:-mempool-db}
+    restart: unless-stopped
+    stop_grace_period: 1m
+    user: "1000:1000"
+    environment:
+      MYSQL_DATABASE: mempool
+      MYSQL_USER: mempool
+      MYSQL_PASSWORD: ${MEMPOOL_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MEMPOOL_DB_ROOT_PASSWORD}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - ${MEMPOOL_DATA_PATH:?MEMPOOL_DATA_PATH must be set in .env}/mysql:/var/lib/mysql
+
+  mempool-api:
+    build:
+      context: ./mempool/backend
+      dockerfile: Dockerfile
+    container_name: ${MEMPOOL_API_CONTAINER_NAME:-mempool-api}
+    restart: unless-stopped
+    stop_grace_period: 1m
+    depends_on:
+      - bitcoin-node
+      - electrs
+      - mempool-db
+    volumes:
+      - ${MEMPOOL_DATA_PATH:?MEMPOOL_DATA_PATH must be set in .env}/cache:/backend/cache
+    environment:
+      MEMPOOL_BACKEND: electrum
+      CORE_RPC_HOST: bitcoin-node
+      CORE_RPC_PORT: ${RPC_PORT:-8332}
+      CORE_RPC_USERNAME: ${BITCOIN_RPC_USER}
+      CORE_RPC_PASSWORD: ${BITCOIN_RPC_PASSWORD}
+      CORE_RPC_TIMEOUT: "60000"
+      ELECTRUM_HOST: electrs
+      ELECTRUM_PORT: "50001"
+      ELECTRUM_TLS_ENABLED: "false"
+      DATABASE_ENABLED: "true"
+      DATABASE_HOST: mempool-db
+      DATABASE_DATABASE: mempool
+      DATABASE_USERNAME: mempool
+      DATABASE_PASSWORD: ${MEMPOOL_DB_PASSWORD}
+      STATISTICS_ENABLED: "true"
+      SYSLOG_ENABLED: "false"
+      LIGHTNING_ENABLED: "false"
+      SOCKS5PROXY_ENABLED: "true"
+      SOCKS5PROXY_HOST: "127.0.0.1"
+      SOCKS5PROXY_PORT: "9050"
+      MEMPOOL_CACHE_DIR: /backend/cache
+
+  mempool-web:
+    build:
+      context: ./mempool/frontend
+      dockerfile: Dockerfile
+    container_name: ${MEMPOOL_WEB_CONTAINER_NAME:-mempool-web}
+    restart: unless-stopped
+    stop_grace_period: 1m
+    depends_on:
+      - mempool-api
+      - mempool-db
+    volumes:
+      - ${MEMPOOL_DATA_PATH:?MEMPOOL_DATA_PATH must be set in .env}/tor/mempool_hidden_service:/var/lib/tor/mempool_hidden_service
+    environment:
+      FRONTEND_HTTP_PORT: "8080"
+      BACKEND_MAINNET_HTTP_HOST: mempool-api
+      BACKEND_MAINNET_HTTP_PORT: "8999"
+    # Mempool UI is accessible via Tor hidden service only (no clearnet exposure)
+    # ports:
+    #   - "${MEMPOOL_WEB_PORT:-8080}:8080"
 

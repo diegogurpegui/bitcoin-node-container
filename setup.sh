@@ -55,7 +55,10 @@ fi
 
 # Update BITCOIN_DATA_PATH in .env
 sed -i "s|BITCOIN_DATA_PATH=.*|BITCOIN_DATA_PATH=${DATA_PATH}|" .env
+PARENT_DIR=$(dirname "${DATA_PATH}")
+sed -i "s|MEMPOOL_DATA_PATH=.*|MEMPOOL_DATA_PATH=${PARENT_DIR}/mempool|" .env
 echo "✓ Set data path to: ${DATA_PATH}"
+echo "✓ Set mempool data path to: ${PARENT_DIR}/mempool"
 echo ""
 
 # Create directory if it doesn't exist
@@ -75,6 +78,8 @@ if [ ! -d "$DATA_PATH" ]; then
         }
     fi
 fi
+
+mkdir -p "${DATA_PATH}/tor"
 echo ""
 
 # Network selection
@@ -164,12 +169,40 @@ else
         mkdir -p "$ELECTRS_DATA_PATH"
         echo "✓ Created electrs data directory: ${ELECTRS_DATA_PATH}"
     fi
+
+    mkdir -p "${ELECTRS_DATA_PATH}/tor/electrs_hidden_service"
     
     # Copy the template electrs.toml from the repo
     cp electrs/electrs.toml "${ELECTRS_CONF}"
     
     chmod 600 "${ELECTRS_CONF}"
     echo "✓ Created electrs.toml at: ${ELECTRS_CONF}"
+fi
+echo ""
+
+# Create mempool data directories and DB credentials
+echo "Step 6: Configuring Mempool"
+echo "--------------------------------------"
+
+MEMPOOL_DATA_PATH=$(grep "^MEMPOOL_DATA_PATH=" .env | cut -d'=' -f2)
+
+if [ -z "$MEMPOOL_DATA_PATH" ]; then
+    echo -e "${YELLOW}Warning: MEMPOOL_DATA_PATH not found in .env file${NC}"
+    echo "Skipping Mempool data directory setup"
+else
+    mkdir -p "${MEMPOOL_DATA_PATH}/mysql" "${MEMPOOL_DATA_PATH}/cache" "${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service"
+    echo "✓ Created mempool data directories under: ${MEMPOOL_DATA_PATH}"
+
+    chown -R 1000:1000 "${MEMPOOL_DATA_PATH}" 2>/dev/null || {
+        echo "⚠ Could not set mempool directory ownership to 1000:1000. You may need to run:"
+        echo "  sudo chown -R 1000:1000 ${MEMPOOL_DATA_PATH}"
+    }
+
+    MEMPOOL_DB_PASSWORD=$(openssl rand -hex 24)
+    MEMPOOL_DB_ROOT_PASSWORD=$(openssl rand -hex 24)
+    sed -i "s|MEMPOOL_DB_PASSWORD=.*|MEMPOOL_DB_PASSWORD=${MEMPOOL_DB_PASSWORD}|" .env
+    sed -i "s|MEMPOOL_DB_ROOT_PASSWORD=.*|MEMPOOL_DB_ROOT_PASSWORD=${MEMPOOL_DB_ROOT_PASSWORD}|" .env
+    echo "✓ Generated Mempool MariaDB credentials"
 fi
 echo ""
 
@@ -189,6 +222,9 @@ echo "  Bitcoin Config: ${BITCOIN_CONF}"
 if [ ! -z "$ELECTRS_DATA_PATH" ]; then
     echo "  Electrs Config: ${ELECTRS_DATA_PATH}/electrs.toml"
 fi
+if [ ! -z "$MEMPOOL_DATA_PATH" ]; then
+    echo "  Mempool Data: ${MEMPOOL_DATA_PATH}"
+fi
 echo "  RPC User: ${RPC_USER}"
 echo ""
 echo -e "${YELLOW}⚠ IMPORTANT - Save these credentials securely:${NC}"
@@ -203,6 +239,10 @@ STEP=2
 if [ ! -z "$ELECTRS_DATA_PATH" ]; then
     echo "  ${STEP}. Review electrs.toml if you want to customize Electrs settings"
     echo "     Location: ${ELECTRS_DATA_PATH}/electrs.toml"
+    STEP=$((STEP + 1))
+fi
+if [ ! -z "$MEMPOOL_DATA_PATH" ]; then
+    echo "  ${STEP}. If this node already had bitcoin.conf, enable ZMQ there (see bitcoin.conf template)"
     STEP=$((STEP + 1))
 fi
 

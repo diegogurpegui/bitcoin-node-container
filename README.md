@@ -35,23 +35,24 @@ docker-compose up -d
 - **Privacy-focused: All connections via Tor** (.onion only)
 - Built-in Tor daemon (no separate container needed)
 - **Electrum server (Electrs)** for wallet connectivity via Tor hidden service
-- Two-container setup: bitcoin-node + electrs-server
+- **Mempool** block explorer (local mempool.space) via Tor hidden service
 - Helper script for easy commands
 
 ## Architecture
 
-This setup runs two containers:
-
 1. **bitcoin-node**: Bitcoin Core with Tor daemon
-   - Handles blockchain sync and P2P connections
-   - Provides RPC interface for applications
-   - All connections via Tor (.onion only)
+   - Blockchain sync, P2P, RPC
+   - All P2P via Tor
 
-2. **electrs-server**: Electrum server with Tor daemon
-   - Indexes blockchain for fast wallet queries
-   - Provides Electrum protocol for wallet connectivity
-   - Accessible only via Tor hidden service
-   - Depends on bitcoin-node for blockchain data
+2. **electrs**: Electrum server with Tor daemon
+   - Wallet queries over Electrum protocol
+   - Tor hidden service only (no host port); reachable as `electrs:50001` on the Docker network
+
+3. **mempool-web / mempool-api / mempool-db**: local [Mempool](https://github.com/mempool/mempool/tree/master/docker) explorer
+   - API talks to `bitcoin-node` (RPC) and `electrs` (Electrum)
+   - API outbound (prices, mining pools) via Tor SOCKS
+   - UI via Tor hidden service only (no host port)
+   - MariaDB + cache on the external drive
 
 ## Common Commands
 
@@ -71,14 +72,16 @@ This setup runs two containers:
 # View logs
 docker-compose logs -f
 
-# View Electrs logs specifically
+# View Electrs / Mempool logs
 docker-compose logs -f electrs
+docker-compose logs -f mempool-api mempool-web mempool-db
 
 # Restart node
 docker-compose restart
 
-# Restart Electrs only
+# Restart Electrs or Mempool only
 docker-compose restart electrs
+docker-compose restart mempool-web mempool-api mempool-db
 
 # Stop node
 docker-compose down
@@ -137,7 +140,7 @@ docker exec electrs-server cat /var/lib/tor/electrs_hidden_service/hostname
 
 **Important notes:**
 - Electrs runs in its own container with its own Tor daemon
-- Electrs is only accessible via Tor hidden service (no clearnet exposure)
+- Electrs is not published to the host; wallets use the Tor hidden service. Mempool uses `electrs:50001` on the Docker network
 - Electrs must fully index the blockchain before wallets can connect
 - Initial indexing can take 12+ hours on slower hardware
 - Electrs will automatically reindex if Bitcoin Core is updated
@@ -261,6 +264,31 @@ docker-compose up -d electrs
 
 Electrs will automatically reindex if needed.
 
+## Mempool (block explorer)
+
+Local mempool.space against this node. Images: `mempool/frontend:v3.3.1` and `mempool/backend:v3.3.1`, wrapped with Tor like Electrs.
+
+**Needs:**
+- Synced `bitcoin-node` (`txindex=1`)
+- Indexed Electrs
+- ZMQ enabled in the live `bitcoin.conf` (already on in the repo template)
+
+If this node was set up before Mempool, add the `MEMPOOL_*` vars from `.env.template`, then:
+
+```bash
+mkdir -p "${MEMPOOL_DATA_PATH}/mysql" "${MEMPOOL_DATA_PATH}/cache"
+sudo chown -R 1000:1000 "${MEMPOOL_DATA_PATH}"
+```
+
+**Onion address:**
+```bash
+docker exec mempool-web cat /var/lib/tor/mempool_hidden_service/hostname
+```
+
+Open `http://<onion>/` over Tor (port 80).
+
+**Updating Mempool:** bump `mempool/frontend/Dockerfile` and `mempool/backend/Dockerfile` tags, then `docker-compose build mempool-web mempool-api && docker-compose up -d`.
+
 ## Tor Privacy Configuration
 
 This node is configured for maximum privacy using Tor:
@@ -269,16 +297,27 @@ This node is configured for maximum privacy using Tor:
 - All Bitcoin P2P connections route through Tor (`proxy=127.0.0.1:9050`)
 - Only connects to `.onion` addresses (`onlynet=onion`)
 - Hidden service for incoming connections (`listenonion=1`)
-- Tor daemon runs automatically in both containers
+- Tor runs in bitcoin-node, electrs, mempool-web, and mempool-api
 - No clearnet exposure (`discover=0`)
-- Electrs also runs via Tor hidden service (separate from Bitcoin node)
+- Electrs and Mempool UI run via Tor hidden services (separate from Bitcoin node)
 
 **How it works:**
-1. Both containers start their own Tor daemons
+1. Services that need Tor start their own daemons
 2. Bitcoin Core connects exclusively through Tor
 3. Bitcoin node creates `.onion` address for incoming connections
-4. Electrs creates separate `.onion` address for wallet connections
-5. All peer connections are via Tor hidden services
+4. Electrs creates a `.onion` address for wallet connections
+5. Mempool UI creates a `.onion` address for the explorer
+6. All Bitcoin peer connections are via Tor hidden services
+
+**Stable .onion addresses:** Hidden-service keys are stored on the external drive so recreates keep the same `.onion` URLs. `setup.sh` creates the dirs.
+
+| Service | Host path | Container |
+|---------|-----------|-----------|
+| bitcoin-node | `${BITCOIN_DATA_PATH}/tor` | `/var/lib/tor` |
+| electrs | `${ELECTRS_DATA_PATH}/tor/electrs_hidden_service` | `/var/lib/tor/electrs_hidden_service` |
+| mempool-web | `${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service` | `/var/lib/tor/mempool_hidden_service` |
+
+Containers chmod/chown HiddenServiceDir at startup (Tor requires `700`). To keep existing onions when adding mounts, `docker cp` keys to those host paths then `docker compose up -d`. Back up those directories. Bitcoin Core's P2P onion key (`onion_v3_private_key`) already lives in the bitcoin datadir.
 
 **Benefits:**
 - Complete IP address privacy
@@ -309,3 +348,4 @@ Based on: [RaspiBolt Bitcoin Client Guide](https://raspibolt.org/guide/bitcoin/b
 - [Bitcoin Core RPC Docs](https://developer.bitcoin.org/reference/rpc/)
 - [RaspiBolt Guide](https://raspibolt.org/)
 - [Tor Project](https://www.torproject.org/)
+- [Mempool Docker](https://github.com/mempool/mempool/tree/master/docker)

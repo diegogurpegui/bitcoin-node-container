@@ -7,8 +7,8 @@ daemon_dir = "/data/bitcoin"
 daemon_rpc_addr = "bitcoin-node:8332"
 daemon_p2p_addr = "bitcoin-node:8333"
 
-# Electrs settings (bind to localhost only)
-electrum_rpc_addr = "127.0.0.1:50001"
+# Reachable on the Docker network (mempool-api). Not published to the host; wallets use Tor.
+electrum_rpc_addr = "0.0.0.0:50001"
 db_dir = "/data/electrs/db"
 
 # Logging

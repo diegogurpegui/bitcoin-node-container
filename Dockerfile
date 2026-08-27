@@ -43,6 +43,9 @@ RUN echo "ControlPort 9051" >> /etc/tor/torrc && \
     echo "CookieAuthFileGroupReadable 1" >> /etc/tor/torrc && \
     echo "DataDirectory /var/lib/tor" >> /etc/tor/torrc
 
+COPY start-tor.sh /usr/local/bin/start-tor.sh
+RUN chmod 755 /usr/local/bin/start-tor.sh
+
 # Create supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

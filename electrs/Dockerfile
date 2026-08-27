@@ -42,6 +42,8 @@ RUN mkdir -p /data/electrs/db && \
 
 # Copy Tor configuration
 COPY torrc /etc/tor/torrc
+COPY start-tor.sh /usr/local/bin/start-tor.sh
+RUN chmod 755 /usr/local/bin/start-tor.sh
 
 # Create Tor directories and set permissions
 RUN mkdir -p /var/lib/tor/electrs_hidden_service && \
