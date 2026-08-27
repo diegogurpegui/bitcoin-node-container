@@ -11,9 +11,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Bitcoin Core version
-ENV BITCOIN_VERSION=29.1
+ENV BITCOIN_VERSION=31.1
 ENV BITCOIN_URL=https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_VERSION}/bitcoin-${BITCOIN_VERSION}-x86_64-linux-gnu.tar.gz
-ENV BITCOIN_SHA256=2dddeaa8c0626ec446b6f21b64c0f3565a1e7e67ff0b586d25043cbd686c9455
+ENV BITCOIN_SHA256=b80d9c3e04da78fb6f0569685673418cf686fadba9042d926d13fb87ff503f9e
 
 # Download and verify Bitcoin Core
 RUN cd /tmp && \

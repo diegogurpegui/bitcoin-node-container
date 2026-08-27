@@ -1,20 +1,37 @@
+FROM rust:1.85-bookworm AS builder
+
+ARG ELECTRS_VERSION=0.11.1
+ARG ELECTRS_COMMIT=35216c6d30148be8e6763d913d437330f431fc03
+
+RUN apt-get update && apt-get install -y \
+    git \
+    ca-certificates \
+    clang \
+    libclang-dev \
+    llvm \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download Electrs source at the pinned release tag and verify commit
+RUN cd /tmp && \
+    git clone --branch v${ELECTRS_VERSION} https://github.com/romanz/electrs.git && \
+    cd electrs && \
+    test "$(git rev-parse HEAD)" = "${ELECTRS_COMMIT}" && \
+    test "$(git rev-parse v${ELECTRS_VERSION}^{commit})" = "${ELECTRS_COMMIT}"
+
+# Build Electrs
+RUN cd /tmp/electrs && \
+    cargo build --locked --release
+
 FROM debian:bookworm-slim
 
-# Install dependencies for building Electrs and Tor
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    cargo \
-    clang \
-    cmake \
-    git \
-    curl \
-    gpg \
-    ca-certificates \
     tor \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Electrs version (set as build arg to avoid environment variable conflicts)
-ARG ELECTRS_VERSION=0.10.10
+COPY --from=builder /tmp/electrs/target/release/electrs /usr/local/bin/electrs
 
 # Create electrs user and group
 RUN useradd -r -m -s /bin/bash electrs
@@ -22,19 +39,6 @@ RUN useradd -r -m -s /bin/bash electrs
 # Create electrs data directory
 RUN mkdir -p /data/electrs/db && \
     chown -R electrs:electrs /data/electrs
-
-# Download and verify Electrs source code
-RUN cd /tmp && \
-    git clone --branch v${ELECTRS_VERSION} https://github.com/romanz/electrs.git && \
-    cd electrs && \
-    curl https://romanzey.de/pgp.txt | gpg --import && \
-    git verify-tag v${ELECTRS_VERSION}
-
-# Build Electrs
-RUN cd /tmp/electrs && \
-    cargo build --locked --release && \
-    install -m 0755 -o root -g root -t /usr/local/bin target/release/electrs && \
-    rm -rf /tmp/electrs
 
 # Copy Tor configuration
 COPY torrc /etc/tor/torrc
