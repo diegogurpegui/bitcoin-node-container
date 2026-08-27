@@ -36,6 +36,7 @@ docker-compose up -d
 - Built-in Tor daemon (no separate container needed)
 - **Electrum server (Electrs)** for wallet connectivity via Tor hidden service
 - **Mempool** block explorer (local mempool.space) via Tor hidden service
+- **[am-i.exposed](https://am-i.exposed/setup-guide/)** privacy scanner against this node's Mempool via Tor hidden service
 - Helper script for easy commands
 
 ## Architecture
@@ -53,6 +54,11 @@ docker-compose up -d
    - API outbound (prices, mining pools) via Tor SOCKS
    - UI via Tor hidden service only (no host port)
    - MariaDB + cache on the external drive
+
+4. **am-i-exposed / am-i-exposed-tor-proxy**: local [am-i.exposed](https://github.com/copexit/am-i-exposed) (Umbrel images)
+   - nginx reverse-proxies `/api` to `mempool-web:8080` (no CORS, no public mempool.space)
+   - Chainalysis lookups via `am-i-exposed-tor-proxy` (HTTP→SOCKS, own Tor)
+   - UI via Tor hidden service only (no host port)
 
 ## Common Commands
 
@@ -75,6 +81,7 @@ docker-compose logs -f
 # View Electrs / Mempool logs
 docker-compose logs -f electrs
 docker-compose logs -f mempool-api mempool-web mempool-db
+docker-compose logs -f am-i-exposed am-i-exposed-tor-proxy
 
 # Restart node
 docker-compose restart
@@ -82,6 +89,7 @@ docker-compose restart
 # Restart Electrs or Mempool only
 docker-compose restart electrs
 docker-compose restart mempool-web mempool-api mempool-db
+docker-compose restart am-i-exposed am-i-exposed-tor-proxy
 
 # Stop node
 docker-compose down
@@ -287,7 +295,28 @@ docker exec mempool-web cat /var/lib/tor/mempool_hidden_service/hostname
 
 Open `http://<onion>/` over Tor (port 80).
 
-**Updating Mempool:** bump `mempool/frontend/Dockerfile` and `mempool/backend/Dockerfile` tags, then `docker-compose build mempool-web mempool-api && docker-compose up -d`.
+**Updating Mempool:** bump `mempool/frontend/Dockerfile` and `mempool/backend/Dockerfile` tags, then `docker compose build mempool-web mempool-api && docker compose up -d`.
+
+## am-i.exposed
+
+Self-hosted [am-i.exposed](https://am-i.exposed/setup-guide/) using the official Umbrel images (`ghcr.io/copexit/am-i-exposed-umbrel` + `am-i-exposed-tor-proxy`), wrapped with Tor like Mempool. API traffic stays on the Docker network; Chainalysis checks go out over Tor.
+
+Existing data dir (once):
+
+```bash
+mkdir -p "${MEMPOOL_DATA_PATH}/tor/amiexposed_hidden_service"
+docker compose build am-i-exposed && docker compose up -d
+```
+
+**Onion address:**
+
+```bash
+docker exec am-i-exposed cat /var/lib/tor/amiexposed_hidden_service/hostname
+```
+
+Open `http://<onion>/` over Tor (port 80). Recreate `am-i-exposed` once after Mempool's onion exists if explorer links are missing.
+
+**Updating:** bump tags in `am-i-exposed/Dockerfile` and `am-i-exposed/tor-proxy/Dockerfile`, then `docker compose build am-i-exposed am-i-exposed-tor-proxy && docker compose up -d`.
 
 ## Tor Privacy Configuration
 
@@ -297,7 +326,7 @@ This node is configured for maximum privacy using Tor:
 - All Bitcoin P2P connections route through Tor (`proxy=127.0.0.1:9050`)
 - Only connects to `.onion` addresses (`onlynet=onion`)
 - Hidden service for incoming connections (`listenonion=1`)
-- Tor runs in bitcoin-node, electrs, mempool-web, and mempool-api
+- Tor runs in bitcoin-node, electrs, mempool-web, mempool-api, and am-i-exposed
 - No clearnet exposure (`discover=0`)
 - Electrs and Mempool UI run via Tor hidden services (separate from Bitcoin node)
 
@@ -307,7 +336,8 @@ This node is configured for maximum privacy using Tor:
 3. Bitcoin node creates `.onion` address for incoming connections
 4. Electrs creates a `.onion` address for wallet connections
 5. Mempool UI creates a `.onion` address for the explorer
-6. All Bitcoin peer connections are via Tor hidden services
+6. am-i.exposed creates a `.onion` address for the scanner
+7. All Bitcoin peer connections are via Tor hidden services
 
 **Stable .onion addresses:** Hidden-service keys are stored on the external drive so recreates keep the same `.onion` URLs. `setup.sh` creates the dirs.
 
@@ -316,6 +346,7 @@ This node is configured for maximum privacy using Tor:
 | bitcoin-node | `${BITCOIN_DATA_PATH}/tor` | `/var/lib/tor` |
 | electrs | `${ELECTRS_DATA_PATH}/tor/electrs_hidden_service` | `/var/lib/tor/electrs_hidden_service` |
 | mempool-web | `${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service` | `/var/lib/tor/mempool_hidden_service` |
+| am-i-exposed | `${MEMPOOL_DATA_PATH}/tor/amiexposed_hidden_service` | `/var/lib/tor/amiexposed_hidden_service` |
 
 Containers chmod/chown HiddenServiceDir at startup (Tor requires `700`). To keep existing onions when adding mounts, `docker cp` keys to those host paths then `docker compose up -d`. Back up those directories. Bitcoin Core's P2P onion key (`onion_v3_private_key`) already lives in the bitcoin datadir.
 
@@ -349,3 +380,4 @@ Based on: [RaspiBolt Bitcoin Client Guide](https://raspibolt.org/guide/bitcoin/b
 - [RaspiBolt Guide](https://raspibolt.org/)
 - [Tor Project](https://www.torproject.org/)
 - [Mempool Docker](https://github.com/mempool/mempool/tree/master/docker)
+- [am-i.exposed self-host](https://am-i.exposed/setup-guide/)

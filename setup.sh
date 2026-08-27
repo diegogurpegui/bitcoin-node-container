@@ -190,7 +190,9 @@ if [ -z "$MEMPOOL_DATA_PATH" ]; then
     echo -e "${YELLOW}Warning: MEMPOOL_DATA_PATH not found in .env file${NC}"
     echo "Skipping Mempool data directory setup"
 else
-    mkdir -p "${MEMPOOL_DATA_PATH}/mysql" "${MEMPOOL_DATA_PATH}/cache" "${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service"
+    mkdir -p "${MEMPOOL_DATA_PATH}/mysql" "${MEMPOOL_DATA_PATH}/cache" \
+      "${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service" \
+      "${MEMPOOL_DATA_PATH}/tor/amiexposed_hidden_service"
     echo "✓ Created mempool data directories under: ${MEMPOOL_DATA_PATH}"
 
     chown -R 1000:1000 "${MEMPOOL_DATA_PATH}" 2>/dev/null || {

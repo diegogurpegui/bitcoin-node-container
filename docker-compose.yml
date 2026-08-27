@@ -132,3 +132,39 @@ services:
     # ports:
     #   - "${MEMPOOL_WEB_PORT:-8080}:8080"
 
+  am-i-exposed-tor-proxy:
+    build:
+      context: ./am-i-exposed/tor-proxy
+      dockerfile: Dockerfile
+    container_name: ${AMI_EXPOSED_TOR_PROXY_CONTAINER_NAME:-am-i-exposed-tor-proxy}
+    restart: unless-stopped
+    stop_grace_period: 10s
+    environment:
+      PORT: "3001"
+      TOR_PROXY_IP: "127.0.0.1"
+      TOR_PROXY_PORT: "9050"
+
+  am-i-exposed:
+    build:
+      context: ./am-i-exposed
+      dockerfile: Dockerfile
+    container_name: ${AMI_EXPOSED_CONTAINER_NAME:-am-i-exposed}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      - mempool-web
+      - am-i-exposed-tor-proxy
+    volumes:
+      - ${MEMPOOL_DATA_PATH:?MEMPOOL_DATA_PATH must be set in .env}/tor/amiexposed_hidden_service:/var/lib/tor/amiexposed_hidden_service
+      - ${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service:/run/mempool_hidden_service:ro
+    environment:
+      APP_MEMPOOL_IP: mempool-web
+      APP_MEMPOOL_PORT: "8080"
+      APP_MEMPOOL_HIDDEN_SERVICE: ""
+      APP_MEMPOOL_EXTERNAL_URL: ""
+      APP_TOR_PROXY_IP: am-i-exposed-tor-proxy
+      APP_TOR_PROXY_PORT: "3001"
+    # UI is accessible via Tor hidden service only (no clearnet exposure)
+    # ports:
+    #   - "${AMI_EXPOSED_WEB_PORT:-8081}:8080"
+

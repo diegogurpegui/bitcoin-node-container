@@ -8,11 +8,11 @@ Plug-and-play: never require host `sudo chown` / UID tables. Fix ownership and m
 
 ## Stack
 
-Bitcoin Core + Tor, Electrs + Tor, Mempool (web/api/db). Data on an external drive via `.env` paths. Electrs and Mempool UI are **Tor hidden services only** (no host ports).
+Bitcoin Core + Tor, Electrs + Tor, Mempool (web/api/db), am-i.exposed. Data on an external drive via `.env` paths. Electrs, Mempool UI, and am-i.exposed are **Tor hidden services only** (no host ports).
 
-- Mempool UI: `http://<onion>/` in Tor Browser — **http, no port** (onion :80 → nginx `127.0.0.1:8080`). Not `https`, not `:8080`.
+- Mempool UI / am-i.exposed: `http://<onion>/` in Tor Browser — **http, no port** (onion :80 → nginx `127.0.0.1:8080`). Not `https`, not `:8080`.
 - Electrs wallets: onion **:50001**.
-- `mempool-api` Tor is SOCKS outbound only (no onion).
+- `mempool-api` Tor is SOCKS outbound only (no onion). `am-i-exposed-tor-proxy` Tor is SOCKS outbound only (Chainalysis HTTP→SOCKS).
 
 Onion addresses come from keys in HiddenServiceDir. Recreate without a persist mount = new onion. Persist on the data drive:
 
@@ -21,6 +21,7 @@ Onion addresses come from keys in HiddenServiceDir. Recreate without a persist m
 | bitcoin-node | `${BITCOIN_DATA_PATH}/tor` | `/var/lib/tor` |
 | electrs | `${ELECTRS_DATA_PATH}/tor/electrs_hidden_service` | `/var/lib/tor/electrs_hidden_service` |
 | mempool-web | `${MEMPOOL_DATA_PATH}/tor/mempool_hidden_service` | `/var/lib/tor/mempool_hidden_service` |
+| am-i-exposed | `${MEMPOOL_DATA_PATH}/tor/amiexposed_hidden_service` | `/var/lib/tor/amiexposed_hidden_service` |
 
 `setup.sh` should `mkdir -p` those dirs; permission fix belongs in the image. Bitcoin Core P2P onion key (`onion_v3_private_key`) is already in the bitcoin datadir.
 
@@ -40,3 +41,5 @@ Image wraps `mempool/frontend` with Tor + supervisord.
 - bitcoin-node: `debian-tor`
 - electrs: Tor runs as `electrs`
 - mempool-web: `tor`
+- am-i-exposed: `tor`
+- am-i-exposed-tor-proxy: `tor`
